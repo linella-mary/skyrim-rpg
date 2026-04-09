@@ -4,9 +4,20 @@ const { createClient } = require('@supabase/supabase-js');
 const logger = require('./logger');
 const fs = require('fs');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'ВАШ_SUPABASE_URL';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || 'ВАШ_SUPABASE_SERVICE_ROLE_KEY';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const RACE_BONUSES = {
+    'Норд': { block: 10 },
+    'Орсимер': { damage_mult: 1.25 },
+    'Каджит': { crit: 5 },
+    'Аргонианин': { hp_mult: 1.20 },
+    'Имперец': { gold_mult: 1.30 },
+    'Альтмер': { exp_mult: 1.20 },
+    'Бретонец': { block: 15 },
+    'Редгард': { stamina: 30 }
+};
 
 class Database {
     constructor() {
@@ -50,34 +61,68 @@ class Database {
     }
 
     /**
-     * Получает персонажа по имени пользователя или создает нового
+     * Получает персонажа по имени пользователя (без автосоздания)
      */
-    async getOrCreateCharacter(username) {
-
-        let { data: character, error } = await supabase
+    async getCharacterByUsername(username) {
+        const { data, error } = await supabase
             .from('characters')
             .select('*')
             .eq('username', username)
             .single();
 
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
+            if (error.code === 'PGRST116') return null; // Не найден — не ошибка
             logger.error({ username, error }, 'Error fetching character by username');
             throw error;
         }
+        return data;
+    }
+
+    /**
+     * Создает нового персонажа с выбором расы и внешности
+     */
+    async createCharacter(username, race = 'Nord', appearance = {}, stats = {}) {
+        logger.info({ username, race }, 'Creating new character with race/appearance');
+        const { data, error } = await supabase
+            .from('characters')
+            .insert([{
+                username,
+                race,
+                appearance,
+                hp: 100,
+                stamina: 100,
+                max_hp: 100,
+                level: 1,
+                exp: 0,
+                gold: 0,
+                strength: stats.strength || 10,
+                dexterity: stats.dexterity || 10,
+                constitution: stats.constitution || 10,
+                luck: stats.luck || 10,
+                physical_defense: 5,
+                evasion: 5,
+                block_chance: 5,
+                accuracy: 10,
+                active_buffs: []
+            }])
+            .select()
+            .single();
+        
+        if (error) {
+            logger.error({ username, error }, 'Error creating new character');
+            throw error;
+        }
+        return data;
+    }
+
+    /**
+     * Получает или создает персонажа (Legacy support)
+     */
+    async getOrCreateCharacter(username) {
+        let character = await this.getCharacterByUsername(username);
 
         if (!character) {
-            logger.info({ username }, 'Creating new character');
-            const { data: newCharacter, error: insertError } = await supabase
-                .from('characters')
-                .insert([{ username: username }])
-                .select()
-                .single();
-            
-            if (insertError) {
-                logger.error({ username, error: insertError }, 'Error creating new character');
-                throw insertError;
-            }
-            character = newCharacter;
+            return await this.createCharacter(username, 'Nord', {});
         }
 
         return character;
@@ -94,6 +139,7 @@ class Database {
             .single();
         
         if (error) {
+            if (error.code === 'PGRST116') return null; // Не найден — не ошибка
             logger.error({ id, error }, 'Error fetching character by ID');
             throw error;
         }
@@ -116,36 +162,107 @@ class Database {
             
             if (error) throw error;
 
+            const now = Date.now();
+            const activeBuffs = char.active_buffs || [];
+
+            // Фильтруем активные баффы (теперь по количеству ходов)
+            const validBuffs = activeBuffs.filter(b => (b.turns_left !== undefined ? b.turns_left > 0 : b.expires > now));
+            const expiredBuffs = activeBuffs.filter(b => (b.turns_left !== undefined ? b.turns_left <= 0 : b.expires <= now));
+            
+            // Если есть просроченные баффы — чистим
+            if (expiredBuffs.length > 0) {
+                this.updateCharacter(characterId, { active_buffs: validBuffs }).catch(e => logger.error({ characterId, error: e }, "Failed to clean expired buffs"));
+            }
+
             let bonusHp = 0;
             let bonusDamage = 0;
             let bonusDodge = 0;
             let bonusTrade = 0;
             let bonusCrit = 0;
             let bonusVamp = 0;
+            // Проклятия
+            let curseDrain = 0;    // hp_drain: передаётся в combat.js для обработки
+            let curseTradeDebuff = 0; // trade: штраф к цене продажи
+            let curseDmgDebuff = 0;   // fragile: штраф к урону
+            
+            // Дополнительные модификаторы от баффов (эликсиры)
+            let buffStrength = 0;
+            let buffDexterity = 0;
+            let buffConstitution = 0;
+            let buffLuck = 0;
+            let buffDefense = 0;
+            let buffAccuracy = 0;
+            let buffCrit = 0;
+            let buffVamp = 0;
+            let buffDodge = 0;
 
             (items || []).forEach(item => {
                 const s = item.item_data.stats || {};
+                const isCursed = item.item_data.cursed || false;
                 if (s.hp) bonusHp += s.hp;
                 if (s.dmg) bonusDamage += s.dmg;
                 if (s.dodge) bonusDodge += s.dodge;
-                if (s.trade) bonusTrade += s.trade;
                 if (s.crit) bonusCrit += s.crit;
                 if (s.vamp) bonusVamp += s.vamp;
+                // Проклятые предметы: отрицательные бонусы отдельно, положительные — в общий пул
+                if (isCursed) {
+                    if (s.hp_drain) curseDrain += s.hp_drain;
+                    if (s.trade && s.trade < 0) curseTradeDebuff += Math.abs(s.trade);
+                    if (s.fragile) curseDmgDebuff += Math.abs(s.fragile || 0);
+                } else {
+                    if (s.trade) bonusTrade += s.trade;
+                }
             });
+            
+            validBuffs.forEach(b => {
+                if (b.stat === 'strength') buffStrength += b.value;
+                if (b.stat === 'dexterity') buffDexterity += b.value;
+                if (b.stat === 'constitution') buffConstitution += b.value;
+                if (b.stat === 'luck') buffLuck += b.value;
+                if (b.stat === 'physical_defense') buffDefense += b.value;
+                if (b.stat === 'accuracy') buffAccuracy += b.value;
+                if (b.stat === 'crit') buffCrit += b.value;
+                if (b.stat === 'vamp') buffVamp += b.value;
+                if (b.stat === 'dodge') buffDodge += b.value;
+            });
+
+            const finalStr = (char.strength || 10) + buffStrength;
+            const finalDex = (char.dexterity || 10) + buffDexterity;
+            const finalCon = (char.constitution || 10) + buffConstitution;
+            const finalLuck = (char.luck || 10) + buffLuck;
+            const finalDef = (char.physical_defense || 5) + buffDefense;
+
+            const rB = RACE_BONUSES[char.race] || {};
+            const dmgMult = rB.damage_mult || 1.0;
+            const hpMult = rB.hp_mult || 1.0;
+            const blockBonus = rB.block || 0;
+            const critBonus = rB.crit || 0;
+            const staminaBonus = rB.stamina || 0;
+            
+            // Применяем штрафы проклятий: уменьшают положительные бонусы
+            const tradeBonus = Math.max(0, (bonusTrade || 0) + (finalLuck / 2) - curseTradeDebuff);
+            const totalCrit = (finalLuck / 2) + bonusCrit + critBonus + buffCrit;
+            const totalDodge = (char.evasion || 5) + finalDex / 2 + bonusDodge + buffDodge;
+            const totalVamp = bonusVamp + buffVamp + (finalDex * 0.1);
 
             return {
                 ...char,
+                active_buffs: validBuffs,
                 base_max_hp: char.max_hp,
-                bonusHp,
-                bonusDamage,
-                bonusDodge,
-                bonusTrade,
-                bonusCrit,
-                bonusVamp,
-                effective_max_hp: char.max_hp + bonusHp,
-                effective_hp: Math.min(char.hp, char.max_hp + bonusHp),
-                effective_damage: (char.base_damage || 5) + bonusDamage,
-                effective_dodge: 10 + bonusDodge
+                bonusHp, bonusDamage, bonusDodge, bonusCrit, bonusVamp, bonusTrade,
+                curse_drain: curseDrain,       // проклятие: утечка HP за ход в бою
+                effective_max_hp: Math.floor((char.max_hp + bonusHp + (finalCon * 2)) * hpMult),
+                effective_hp: Math.min(char.hp, Math.floor((char.max_hp + bonusHp + (finalCon * 2)) * hpMult)),
+                effective_damage: Math.floor(((char.base_damage || 0) + finalStr + bonusDamage - curseDmgDebuff) * dmgMult),
+                effective_dodge: totalDodge,
+                effective_crit: totalCrit,
+                effective_block: (char.block_chance || 5) + (finalDef / 2) + blockBonus,
+                effective_max_stamina: (char.max_stamina || 100) + staminaBonus + (finalStr * 0.5),
+                effective_trade: tradeBonus,
+                effective_accuracy: (char.accuracy || 10) + buffAccuracy,
+                effective_vamp: totalVamp,
+                gold_find_mult: rB.gold_mult || 1.0,
+                exp_find_mult: rB.exp_mult || 1.0
             };
         } catch (error) {
             logger.error({ characterId, error }, 'Error calculating effective stats');
@@ -165,6 +282,7 @@ class Database {
             .single();
         
         if (error) {
+            if (error.code === 'PGRST116') return null;
             logger.error({ id, updates, error }, 'Error updating character stats');
             throw error;
         }
@@ -199,6 +317,7 @@ class Database {
             .single();
         
         if (error) {
+            if (error.code === 'PGRST116') return null; // Предмет уже мог быть удален (гонка)
             logger.error({ itemId, characterId, error }, 'Error fetching item');
             throw error;
         }
@@ -234,6 +353,7 @@ class Database {
             .single();
         
         if (error) {
+            if (error.code === 'PGRST116') return null;
             logger.error({ itemId, isEquipped, error }, 'Error setting item equipment state');
             throw error;
         }
@@ -242,8 +362,28 @@ class Database {
 
     /**
      * Добавляет предмет в инвентарь (Лут)
+     * Лимит: MAX_INVENTORY_SLOTS неэкипированных предметов
      */
     async addLoot(characterId, lootData) {
+        const MAX_INVENTORY_SLOTS = 20;
+
+        // Считаем только неэкипированные предметы (экипировка слоты не занимает)
+        const { count, error: countError } = await supabase
+            .from('inventory')
+            .select('id', { count: 'exact', head: true })
+            .eq('character_id', characterId)
+            .eq('is_equipped', false);
+        
+        if (countError) {
+            logger.error({ characterId, error: countError }, 'Error counting inventory slots');
+            throw countError;
+        }
+
+        if (count >= MAX_INVENTORY_SLOTS) {
+            logger.warn({ characterId, count }, 'Inventory full, cannot add loot');
+            throw new Error(`Инвентарь переполнен! Максимум ${MAX_INVENTORY_SLOTS} предметов. Продайте или выбросьте что-нибудь.`);
+        }
+
         const { data, error } = await supabase
             .from('inventory')
             .insert([{
