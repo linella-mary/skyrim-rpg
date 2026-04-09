@@ -17,9 +17,194 @@ const CommandHandler = require('./commandHandler');
 const logger = require('./logger');
 
 const PORT = process.env.PORT || 3000;
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'skyrim-admin-2024';
+
 const app = express();
+app.use(express.json());
+
+// --- CORS для локальной статики ---
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Token');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+    next();
+});
+
+// --- Middleware проверки токена ---
+function adminAuth(req, res, next) {
+    const token = req.headers['x-admin-token'];
+    if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+    next();
+}
 
 app.get('/ping', (req, res) => res.json({ status: 'ok', message: 'Server is alive' }));
+
+// --- ADMIN API ---
+
+// Список всех персонажей
+app.get('/admin/characters', adminAuth, async (req, res) => {
+    try {
+        const { createClient } = require('@supabase/supabase-js');
+        const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+        const { data, error } = await supabase.from('characters').select('*').order('level', { ascending: false });
+        if (error) throw error;
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Получить одного персонажа
+app.get('/admin/characters/:id', adminAuth, async (req, res) => {
+    try {
+        const char = await db.getCharacterById(req.params.id);
+        if (!char) return res.status(404).json({ error: 'Not found' });
+        const effective = await db.getEffectiveStats(req.params.id);
+        res.json(effective);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Обновить персонажа (hp, gold, level, exp, stats...)
+app.patch('/admin/characters/:id', adminAuth, async (req, res) => {
+    try {
+        const allowed = ['hp', 'max_hp', 'stamina', 'gold', 'level', 'exp', 'strength', 'dexterity',
+                         'constitution', 'luck', 'physical_defense', 'evasion', 'block_chance',
+                         'accuracy', 'base_damage', 'body_state', 'active_buffs'];
+        const updates = {};
+        for (const key of allowed) {
+            if (req.body[key] !== undefined) updates[key] = req.body[key];
+        }
+        const updated = await db.updateCharacter(req.params.id, updates);
+        res.json(updated);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Удалить персонажа
+app.delete('/admin/characters/:id', adminAuth, async (req, res) => {
+    try {
+        const { createClient } = require('@supabase/supabase-js');
+        const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+        const { error } = await supabase.from('characters').delete().eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Инвентарь персонажа
+app.get('/admin/characters/:id/inventory', adminAuth, async (req, res) => {
+    try {
+        const items = await db.getInventory(req.params.id);
+        res.json(items);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Удалить предмет из инвентаря
+app.delete('/admin/inventory/:itemId', adminAuth, async (req, res) => {
+    try {
+        await db.deleteItem(req.params.itemId);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Онлайн-игроки (из WebSocket соединений)
+app.get('/admin/online', adminAuth, (req, res) => {
+    const online = [];
+    for (const client of wss.clients) {
+        if (client.readyState === WebSocket.OPEN && client.characterId) {
+            online.push({
+                characterId: client.characterId,
+                username: client.username,
+                room: client.room || 'global',
+                x: client.x,
+                y: client.y,
+                body_state: client.body_state
+            });
+        }
+    }
+    res.json(online);
+});
+
+// Статистика сервера
+app.get('/admin/stats', adminAuth, async (req, res) => {
+    try {
+        const { createClient } = require('@supabase/supabase-js');
+        const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+        const { count: charCount } = await supabase.from('characters').select('id', { count: 'exact', head: true });
+        const { count: itemCount } = await supabase.from('inventory').select('id', { count: 'exact', head: true });
+
+        let logCount = 0;
+        try {
+            const { count } = await supabase.from('audit_logs').select('id', { count: 'exact', head: true });
+            logCount = count || 0;
+        } catch (_) {}
+
+        const onlineCount = [...wss.clients].filter(c => c.readyState === WebSocket.OPEN && c.characterId).length;
+        const activeBattles = combat ? combat.activeBattles.size : 0;
+
+        res.json({
+            online: onlineCount,
+            total_characters: charCount || 0,
+            total_items: itemCount || 0,
+            total_logs: logCount,
+            active_battles: activeBattles,
+            uptime_seconds: Math.floor(process.uptime()),
+            memory_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Логи аудита
+app.get('/admin/logs', adminAuth, async (req, res) => {
+    try {
+        const { createClient } = require('@supabase/supabase-js');
+        const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+        const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+        const { data, error } = await supabase
+            .from('audit_logs')
+            .select('*, characters(username)')
+            .order('created_at', { ascending: false })
+            .limit(limit);
+        if (error) throw error;
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Кикнуть игрока (разорвать WS соединение)
+app.post('/admin/kick/:characterId', adminAuth, (req, res) => {
+    let kicked = false;
+    for (const client of wss.clients) {
+        if (client.readyState === WebSocket.OPEN && client.characterId === req.params.characterId) {
+            client.send(JSON.stringify({ event: 'error', message: 'Вас отключил администратор.' }));
+            client.terminate();
+            kicked = true;
+            break;
+        }
+    }
+    res.json({ success: kicked, message: kicked ? 'Kicked' : 'Player not online' });
+});
+
+// Отправить системное сообщение в чат всем
+app.post('/admin/broadcast', adminAuth, (req, res) => {
+    const { text, room } = req.body;
+    if (!text) return res.status(400).json({ error: 'text required' });
+    broadcast({ event: 'chat_broadcast', sender: '👑 Администратор', text, type: 'system' }, room || null);
+    res.json({ success: true });
+});
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
