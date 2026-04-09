@@ -40,6 +40,11 @@ function adminAuth(req, res, next) {
 
 app.get('/ping', (req, res) => res.json({ status: 'ok', message: 'Server is alive' }));
 
+// --- Раздача admin.html ---
+app.get('/admin', (req, res) => {
+    res.sendFile(require('path').join(__dirname, 'admin.html'));
+});
+
 // --- ADMIN API ---
 
 // Список всех персонажей
