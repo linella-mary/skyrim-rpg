@@ -12,16 +12,30 @@ module.exports = {
   
   type_weapon: ["Меч", "Топор", "Булава", "Кинжал", "Двуручник", "Копье", "Секира", "Боевой молот", "Клеймор"],
   type_armor: ["Кираса", "Броня", "Кольчуга", "Доспех", "Нагрудник", "Латы", "Панцирь", "Одеяние Мага"],
-  type_armor: ["Кираса", "Броня", "Кольчуга", "Доспех", "Нагрудник", "Латы", "Панцирь", "Одеяние Мага"],
   type_jewel: ["Амулет", "Кольцо", "Ожерелье", "Перстень", "Медальон", "Обруч"],
   type_offhand: ["Щит", "Стилет", "Фолиант", "Гримуар", "Оберег", "Тарч", "Резной щит"],
-  type_potion: ["Зелье Каменной Кожи", "Экстракт Силы", "Зелье Берсерка", "Зелье Призрачности", "Отвар Защиты"],
+  type_potion: ["Экстракт Силы", "Настойка Ловкости", "Кровь Тролля", "Отвар Стойкости", "Зелье Удачи", "Зелье Точности", "Напиток Вампира", "Зелье Берсерка", "Зелье Железной Кожи", "Эликсир Отражения"],
 
   base_weapon: { min: 5, max: 15 },
   base_armor: { min: 10, max: 25 },
   base_offhand: { min: 5, max: 15 },
-  potion_buff: { min: 5, max: 20 },
-  potion_dur: { min: 5, max: 10 },
+  
+  potion_buff: { min: 5, max: 15 },
+  potion_dur: { min: 300, max: 600 },
+  
+  // Эффекты зелий (Buffs)
+  potion_effects: {
+    "Экстракт Силы": { stat: "strength", value: 15, duration: 12 },
+    "Настойка Ловкости": { stat: "dexterity", value: 10, duration: 12 },
+    "Кровь Тролля": { stat: "constitution", value: 20, duration: 24 },
+    "Отвар Стойкости": { stat: "physical_defense", value: 15, duration: 12 },
+    "Зелье Удачи": { stat: "luck", value: 15, duration: 24 },
+    "Зелье Точности": { stat: "accuracy", value: 20, duration: 12 },
+    "Напиток Вампира": { stat: "vamp", value: 10, duration: 12 },
+    "Зелье Берсерка": { stat: "crit", value: 15, duration: 12 },
+    "Зелье Железной Кожи": { stat: "physical_defense", value: 25, duration: 18 },
+    "Эликсир Отражения": { stat: "dodge", value: 15, duration: 12 }
+  },
 
   fx_crit: { min: 5, max: 15 },
   fx_vamp: { min: 2, max: 8 },
