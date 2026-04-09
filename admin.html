@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skyrim RPG — Админ-панель</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161b27;
+    --surface2: #1e2636;
+    --border: #2a3550;
+    --accent: #c8a84b;
+    --accent2: #8ab4f8;
+    --red: #e05c5c;
+    --green: #4caf6e;
+    --yellow: #e0b44a;
+    --text: #d4dff5;
+    --text-dim: #7a8aaa;
+    --font: 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; }
+
+  /* === HEADER === */
+  header {
+    background: linear-gradient(135deg, #0e1420 0%, #1a1f30 100%);
+    border-bottom: 2px solid var(--accent);
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { font-size: 28px; }
+  .logo h1 { font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
+  .logo small { font-size: 11px; color: var(--text-dim); display: block; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); display: inline-block; animation: pulse 2s infinite; }
+  .status-dot.connected { background: var(--green); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .status-text { font-size: 12px; color: var(--text-dim); }
+
+  /* === LOGIN === */
+  #login-screen {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; background: var(--bg);
+  }
+  .login-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 40px; width: 360px; text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .login-box .icon { font-size: 48px; margin-bottom: 16px; }
+  .login-box h2 { color: var(--accent); margin-bottom: 8px; }
+  .login-box p { color: var(--text-dim); margin-bottom: 24px; font-size: 13px; }
+  .field { margin-bottom: 14px; text-align: left; }
+  .field label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .field input { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px; outline: none; transition: border .2s; }
+  .field input:focus { border-color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all .2s; }
+  .btn-primary { background: var(--accent); color: #111; width: 100%; padding: 12px; }
+  .btn-primary:hover { background: #e0c060; }
+  .btn-danger { background: rgba(224,92,92,.15); color: var(--red); border: 1px solid rgba(224,92,92,.3); }
+  .btn-danger:hover { background: rgba(224,92,92,.25); }
+  .btn-success { background: rgba(76,175,110,.15); color: var(--green); border: 1px solid rgba(76,175,110,.3); }
+  .btn-success:hover { background: rgba(76,175,110,.25); }
+  .btn-info { background: rgba(138,180,248,.15); color: var(--accent2); border: 1px solid rgba(138,180,248,.3); }
+  .btn-info:hover { background: rgba(138,180,248,.25); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  #login-error { color: var(--red); font-size: 12px; margin-top: 10px; display: none; }
+
+  /* === LAYOUT === */
+  #app { display: none; }
+  .layout { display: flex; min-height: calc(100vh - 57px); }
+
+  /* === SIDEBAR === */
+  .sidebar {
+    width: 220px; flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 16px 0;
+    display: flex; flex-direction: column;
+    position: sticky; top: 57px; height: calc(100vh - 57px); overflow-y: auto;
+  }
+  .nav-section { padding: 8px 16px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 20px; cursor: pointer; transition: all .15s;
+    border-left: 3px solid transparent; font-size: 13px; color: var(--text-dim);
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: rgba(200,168,75,.08); color: var(--accent); border-left-color: var(--accent); }
+  .nav-item .icon { font-size: 16px; }
+  .badge { background: var(--red); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; margin-left: auto; }
+  .badge.green { background: var(--green); }
+
+  /* === MAIN === */
+  .main { flex: 1; padding: 24px; overflow-y: auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* === PAGE HEADER === */
+  .page-header { margin-bottom: 24px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .page-header h2 { font-size: 20px; color: var(--accent); }
+  .page-header p { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+  .page-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* === STATS CARDS === */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .stat-card .label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+  .stat-card .sub { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+  .stat-card.green .value { color: var(--green); }
+  .stat-card.yellow .value { color: var(--yellow); }
+  .stat-card.red .value { color: var(--red); }
+  .stat-card.blue .value { color: var(--accent2); }
+
+  /* === TABLE === */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .table-toolbar { padding: 14px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .search-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 13px; outline: none; flex: 1; min-width: 180px; }
+  .search-input:focus { border-color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: var(--surface2); color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 10px 14px; border-bottom: 1px solid rgba(42,53,80,.5); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--surface2); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .race-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: rgba(138,180,248,.15); color: var(--accent2); border: 1px solid rgba(138,180,248,.2); }
+  .level-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; background: rgba(200,168,75,.15); color: var(--accent); }
+  .online-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: rgba(76,175,110,.15); color: var(--green); }
+  .online-pill::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--green); }
+  .actions-cell { display: flex; gap: 6px; }
+
+  /* === HP/STAMINA BARS === */
+  .bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 100px; }
+  .bar { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+  .bar-fill.hp { background: linear-gradient(90deg, #e05c5c, #e07c5c); }
+  .bar-fill.stamina { background: linear-gradient(90deg, #4caf6e, #6ecf8e); }
+  .bar-fill.exp { background: linear-gradient(90deg, #8ab4f8, #a8c8ff); }
+  .bar-val { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+
+  /* === MODAL === */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.7); z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; width: 560px; max-width: 95vw;
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 30px 80px rgba(0,0,0,.6);
+  }
+  .modal-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h3 { color: var(--accent); }
+  .modal-close { background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; line-height: 1; }
+  .modal-close:hover { color: var(--text); }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* === FORM GRID === */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group label { font-size: 12px; color: var(--text-dim); }
+  .form-group input, .form-group select, .form-group textarea {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 9px 12px; border-radius: 8px;
+    font-size: 13px; outline: none; transition: border .2s;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+  .form-group input[type=range] { padding: 4px 0; cursor: pointer; background: none; border: none; }
+  .range-val { font-weight: 700; color: var(--accent); }
+
+  /* === BROADCAST === */
+  .broadcast-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+  .broadcast-box h3 { margin-bottom: 14px; color: var(--accent2); font-size: 15px; }
+  .broadcast-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .broadcast-row input { flex: 1; min-width: 200px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 13px; outline: none; }
+  .broadcast-row input:focus { border-color: var(--accent2); }
+  .broadcast-row select { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px 12px; border-radius: 8px; font-size: 13px; outline: none; }
+
+  /* === ONLINE TABLE === */
+  .room-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+  .room-badge.global { background: rgba(138,180,248,.15); color: var(--accent2); }
+  .room-badge.tavern { background: rgba(200,168,75,.15); color: var(--accent); }
+  .room-badge.combat { background: rgba(224,92,92,.15); color: var(--red); }
+
+  /* === LOGS === */
+  .log-item { padding: 10px 0; border-bottom: 1px solid rgba(42,53,80,.5); display: flex; gap: 12px; align-items: flex-start; }
+  .log-item:last-child { border-bottom: none; }
+  .log-icon { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+  .log-content .log-title { font-size: 13px; color: var(--text); }
+  .log-content .log-meta { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+  .log-content .log-details { font-size: 11px; color: var(--text-dim); background: var(--surface2); border-radius: 6px; padding: 4px 8px; margin-top: 6px; font-family: monospace; word-break: break-all; }
+
+  /* === ZONES === */
+  .zones-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .zone-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .zone-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .zone-icon { font-size: 28px; }
+  .zone-name { font-weight: 700; color: var(--text); }
+  .zone-coord { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .zone-tier { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; margin-bottom: 10px; }
+  .zone-tier.t1 { background: rgba(76,175,110,.15); color: var(--green); }
+  .zone-tier.t2 { background: rgba(224,180,74,.15); color: var(--yellow); }
+  .zone-tier.t3 { background: rgba(224,92,92,.15); color: var(--red); }
+  .zone-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; }
+  .zone-stat { display: flex; justify-content: space-between; }
+  .zone-stat span:first-child { color: var(--text-dim); }
+  .zone-stat span:last-child { color: var(--text); font-weight: 600; }
+  .zone-desc { font-size: 12px; color: var(--text-dim); margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .zone-monsters { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+  .zone-monsters strong { color: var(--text); }
+
+  /* === ITEMS DB === */
+  .items-section { margin-bottom: 24px; }
+  .items-section h3 { font-size: 15px; color: var(--accent2); margin-bottom: 14px; }
+  .items-flex { display: flex; flex-wrap: wrap; gap: 8px; }
+  .item-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 20px;
+    font-size: 12px; border: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .item-chip.weapon { border-color: rgba(224,92,92,.4); color: var(--red); }
+  .item-chip.armor { border-color: rgba(138,180,248,.4); color: var(--accent2); }
+  .item-chip.jewel { border-color: rgba(200,168,75,.4); color: var(--accent); }
+  .item-chip.offhand { border-color: rgba(76,175,110,.4); color: var(--green); }
+  .item-chip.potion { border-color: rgba(180,130,230,.4); color: #c488f0; }
+
+  .potion-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .potion-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .potion-name { font-weight: 600; color: #c488f0; margin-bottom: 6px; }
+  .potion-stat { font-size: 12px; color: var(--text-dim); }
+  .potion-stat span { color: var(--green); font-weight: 700; }
+
+  /* === NOTIFY === */
+  #notify {
+    position: fixed; bottom: 20px; right: 20px; z-index: 999;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .notify-item {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px;
+    font-size: 13px; max-width: 320px;
+    animation: slideIn .3s ease;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .notify-item.success { border-left: 4px solid var(--green); }
+  .notify-item.error { border-left: 4px solid var(--red); }
+  .notify-item.info { border-left: 4px solid var(--accent2); }
+  @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+
+  /* === SCROLLBAR === */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a4560; }
+
+  /* === MISC === */
+  .empty-state { text-align: center; padding: 40px; color: var(--text-dim); }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+  .refresh-btn { background: none; border: 1px solid var(--border); color: var(--text-dim); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all .15s; }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .sep { height: 1px; background: var(--border); margin: 20px 0; }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .form-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="icon">⚔️</div>
+    <h2>Skyrim RPG Admin</h2>
+    <p>Введите данные для доступа к панели управления</p>
+    <div class="field">
+      <label>Адрес сервера</label>
+      <input type="text" id="login-url" value="http://localhost:3000" placeholder="http://localhost:3000">
+    </div>
+    <div class="field">
+      <label>Токен доступа</label>
+      <input type="password" id="login-token" value="skyrim-admin-2024" placeholder="admin token">
+    </div>
+    <button class="btn btn-primary" onclick="doLogin()">⚔️ Войти в панель</button>
+    <div id="login-error">Неверный токен или сервер недоступен</div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🐉</div>
+      <div>
+        <h1>SKYRIM RPG ADMIN</h1>
+        <small>Панель управления сервером</small>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="status-dot" id="status-dot"></span>
+      <span class="status-text" id="status-text">Подключение...</span>
+      <button class="refresh-btn" onclick="refreshAll()">↻ Обновить</button>
+      <button class="btn btn-danger btn-sm" onclick="logout()">Выйти</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+      <div class="nav-section">Обзор</div>
+      <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
+        <span class="icon">📊</span> Дашборд
+      </div>
+      <div class="nav-item" onclick="showPage('online')" id="nav-online">
+        <span class="icon">🟢</span> Онлайн
+        <span class="badge green" id="online-badge">0</span>
+      </div>
+
+      <div class="nav-section">База данных</div>
+      <div class="nav-item" onclick="showPage('characters')" id="nav-characters">
+        <span class="icon">👤</span> Персонажи
+      </div>
+      <div class="nav-item" onclick="showPage('logs')" id="nav-logs">
+        <span class="icon">📋</span> Аудит-логи
+      </div>
+
+      <div class="nav-section">Справочники</div>
+      <div class="nav-item" onclick="showPage('zones')" id="nav-zones">
+        <span class="icon">🗺️</span> Зоны
+      </div>
+      <div class="nav-item" onclick="showPage('items')" id="nav-items">
+        <span class="icon">⚗️</span> Предметы
+      </div>
+
+      <div class="nav-section">Управление</div>
+      <div class="nav-item" onclick="showPage('broadcast')" id="nav-broadcast">
+        <span class="icon">📢</span> Сообщения
+      </div>
+    </nav>
+
+    <!-- MAIN -->
+    <main class="main">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div class="page-header">
+          <div>
+            <h2>📊 Дашборд</h2>
+            <p>Общая статистика сервера в реальном времени</p>
+          </div>
+          <div class="page-actions">
+            <button class="refresh-btn" onclick="loadDashboard()">↻ Обновить</button>
+          </div>
+        </div>
+
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card green">
+            <div class="label">🟢 Онлайн</div>
+            <div class="value" id="s-online">—</div>
+            <div class="sub">игроков сейчас</div>
+          </div>
+          <div class="stat-card yellow">
+            <div class="label">⚔️ Сражения</div>
+            <div class="value" id="s-battles">—</div>
+            <div class="sub">активных боёв</div>
+          </div>
+          <div class="stat-card blue">
+            <div class="label">👤 Персонажи</div>
+            <div class="value" id="s-chars">—</div>
+            <div class="sub">всего в БД</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">🎒 Предметы</div>
+            <div class="value" id="s-items">—</div>
+            <div class="sub">в инвентарях</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">📋 Логи</div>
+            <div class="value" id="s-logs">—</div>
+            <div class="sub">событий аудита</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">⏱️ Аптайм</div>
+            <div class="value" id="s-uptime">—</div>
+            <div class="sub">серверное время</div>
+          </div>
+          <div class="stat-card red">
+            <div class="label">💾 Память</div>
+            <div class="value" id="s-mem">—</div>
+            <div class="sub">MB heap used</div>
+          </div>
+        </div>
+
+        <div class="broadcast-box">
+          <h3>📢 Быстрое сообщение всем</h3>
+          <div class="broadcast-row">
+            <input type="text" id="quick-msg" placeholder="Текст системного сообщения..." onkeydown="if(event.key==='Enter')quickBroadcast()">
+            <select id="quick-room">
+              <option value="">Все комнаты</option>
+              <option value="global">global</option>
+              <option value="tavern">tavern</option>
+            </select>
+            <button class="btn btn-info" onclick="quickBroadcast()">📢 Отправить</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <div class="table-toolbar">
+            <strong style="color:var(--accent2)">🟢 Онлайн прямо сейчас</strong>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Игрок</th><th>Комната</th><th>Позиция</th><th>Состояние</th><th>Действия</th></tr>
+            </thead>
+            <tbody id="dash-online-tbody">
+              <tr><td colspan="5" class="empty-state"><div class="icon">🔍</div>Загрузка...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ONLINE -->
+      <div class="page" id="page-online">
+        <div class="page-header">
+          <div>
+            <h2>🟢 Онлайн игроки</h2>
+            <p>Список активных WebSocket соединений</p>
+          </div>
+          <button class="refresh-btn" onclick="loadOnline()">↻ Обновить</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Персонаж</th><th>Комната</th><th>Позиция X/Y</th><th>Состояние тела</th><th>Действия</th></tr>
+            </thead>
+            <tbody id="online-tbody">
+              <tr><td colspan="5" class="empty-state">Загрузка...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CHARACTERS -->
+      <div class="page" id="page-characters">
+        <div class="page-header">
+          <div>
+            <h2>👤 Персонажи</h2>
+            <p>Все персонажи в базе данных Supabase</p>
+          </div>
+          <button class="refresh-btn" onclick="loadCharacters()">↻ Обновить</button>
+        </div>
+        <div class="table-wrap">
+          <div class="table-toolbar">
+            <input class="search-input" type="text" id="char-search" placeholder="🔍 Поиск по имени, расе..." oninput="filterChars()">
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Персонаж</th>
+                <th>Раса</th>
+                <th>Ур.</th>
+                <th>HP</th>
+                <th>Стамина</th>
+                <th>EXP</th>
+                <th>Золото</th>
+                <th>Состояние</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="chars-tbody">
+              <tr><td colspan="9" class="empty-state">Загрузка...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- LOGS -->
+      <div class="page" id="page-logs">
+        <div class="page-header">
+          <div>
+            <h2>📋 Аудит-логи</h2>
+            <p>Последние игровые события из таблицы audit_logs</p>
+          </div>
+          <div class="page-actions">
+            <select id="log-limit" onchange="loadLogs()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:13px;outline:none;">
+              <option value="50">50 записей</option>
+              <option value="100">100 записей</option>
+              <option value="200">200 записей</option>
+            </select>
+            <button class="refresh-btn" onclick="loadLogs()">↻ Обновить</button>
+          </div>
+        </div>
+        <div class="table-wrap" style="padding:0 16px">
+          <div id="logs-list" style="padding: 8px 0">
+            <div class="empty-state"><div class="icon">📋</div>Загрузка логов...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ZONES -->
+      <div class="page" id="page-zones">
+        <div class="page-header">
+          <div>
+            <h2>🗺️ Зоны Скайрима</h2>
+            <p>Справочник игровых зон с монстрами и наградами</p>
+          </div>
+        </div>
+        <div class="zones-grid" id="zones-grid"></div>
+      </div>
+
+      <!-- ITEMS -->
+      <div class="page" id="page-items">
+        <div class="page-header">
+          <div>
+            <h2>⚗️ База предметов</h2>
+            <p>Справочник типов оружия, брони, украшений и зелий</p>
+          </div>
+        </div>
+        <div id="items-content"></div>
+      </div>
+
+      <!-- BROADCAST -->
+      <div class="page" id="page-broadcast">
+        <div class="page-header">
+          <div>
+            <h2>📢 Управление сервером</h2>
+            <p>Сообщения игрокам, кик, управление боями</p>
+          </div>
+        </div>
+        <div class="broadcast-box" style="margin-bottom:20px">
+          <h3>📢 Системное сообщение</h3>
+          <div class="broadcast-row" style="margin-bottom:10px">
+            <input type="text" id="bc-text" placeholder="Текст сообщения для игроков...">
+            <select id="bc-room">
+              <option value="">Все комнаты</option>
+              <option value="global">global</option>
+              <option value="tavern">tavern</option>
+            </select>
+          </div>
+          <button class="btn btn-info" onclick="sendBroadcast()">📢 Отправить всем</button>
+        </div>
+
+        <div class="broadcast-box">
+          <h3 style="margin-bottom:14px">⚙️ Управление</h3>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <input type="text" id="kick-id" placeholder="Character ID для кика..." style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:13px;outline:none;flex:1;min-width:200px;">
+            <button class="btn btn-danger" onclick="kickPlayer()">🦵 Кикнуть игрока</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- MODAL: EDIT CHARACTER -->
+<div class="modal-overlay" id="modal-edit">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Редактировать персонажа</h3>
+      <button class="modal-close" onclick="closeModal('modal-edit')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div style="margin-bottom:16px; display:flex; align-items:center; gap:12px;">
+        <div class="avatar" id="edit-avatar" style="width:48px;height:48px;font-size:24px"></div>
+        <div>
+          <div id="edit-username" style="font-size:16px;font-weight:700;color:var(--text)"></div>
+          <div id="edit-race-display" style="font-size:12px;color:var(--text-dim)"></div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>HP</label>
+          <input type="number" id="edit-hp" min="0">
+        </div>
+        <div class="form-group">
+          <label>Max HP</label>
+          <input type="number" id="edit-maxhp" min="1">
+        </div>
+        <div class="form-group">
+          <label>Стамина</label>
+          <input type="number" id="edit-stamina" min="0">
+        </div>
+        <div class="form-group">
+          <label>Золото</label>
+          <input type="number" id="edit-gold" min="0">
+        </div>
+        <div class="form-group">
+          <label>Уровень</label>
+          <input type="number" id="edit-level" min="1" max="100">
+        </div>
+        <div class="form-group">
+          <label>Опыт (EXP)</label>
+          <input type="number" id="edit-exp" min="0">
+        </div>
+        <div class="sep" style="grid-column:1/-1"></div>
+        <div class="form-group">
+          <label>Сила (Strength)</label>
+          <input type="number" id="edit-strength" min="1">
+        </div>
+        <div class="form-group">
+          <label>Ловкость (Dexterity)</label>
+          <input type="number" id="edit-dexterity" min="1">
+        </div>
+        <div class="form-group">
+          <label>Телосложение (Constitution)</label>
+          <input type="number" id="edit-constitution" min="1">
+        </div>
+        <div class="form-group">
+          <label>Удача (Luck)</label>
+          <input type="number" id="edit-luck" min="1">
+        </div>
+        <div class="form-group">
+          <label>Физ. защита</label>
+          <input type="number" id="edit-defense" min="0">
+        </div>
+        <div class="form-group">
+          <label>Уклонение</label>
+          <input type="number" id="edit-evasion" min="0">
+        </div>
+        <div class="form-group">
+          <label>Блок (%)</label>
+          <input type="number" id="edit-block" min="0">
+        </div>
+        <div class="form-group">
+          <label>Точность</label>
+          <input type="number" id="edit-accuracy" min="0">
+        </div>
+        <div class="form-group">
+          <label>Базовый урон</label>
+          <input type="number" id="edit-damage" min="0">
+        </div>
+        <div class="form-group">
+          <label>Состояние тела</label>
+          <select id="edit-bodystate">
+            <option value="human">human</option>
+            <option value="sitting">sitting</option>
+            <option value="drunk">drunk</option>
+            <option value="monster">monster</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" onclick="closeModal('modal-edit')">Отмена</button>
+      <button class="btn btn-success" onclick="saveCharacter()">💾 Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: VIEW INVENTORY -->
+<div class="modal-overlay" id="modal-inventory">
+  <div class="modal" style="width:640px">
+    <div class="modal-header">
+      <h3>🎒 Инвентарь — <span id="inv-username"></span></h3>
+      <button class="modal-close" onclick="closeModal('modal-inventory')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="inv-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CONFIRM DELETE -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <h3>⚠️ Подтверждение</h3>
+      <button class="modal-close" onclick="closeModal('modal-confirm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-text" style="color:var(--text);line-height:1.6"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-info btn-sm" onclick="closeModal('modal-confirm')">Отмена</button>
+      <button class="btn btn-danger" id="confirm-ok-btn">Удалить</button>
+    </div>
+  </div>
+</div>
+
+<!-- NOTIFICATIONS -->
+<div id="notify"></div>
+
+<script>
+// ==================== CONFIG ====================
+let API_BASE = '';
+let TOKEN = '';
+let allChars = [];
+
+const RACE_ICONS = {
+  'Норд':'🧊','Nord':'🧊','Орсимер':'🐗','Каджит':'🐱','Аргонианин':'🦎',
+  'Имперец':'🏛️','Альтмер':'✨','Бретонец':'🔮','Редгард':'⚔️'
+};
+const BODY_ICONS = { human:'🧍', sitting:'🪑', drunk:'🍺', monster:'👹', normal:'🧍' };
+const LOG_ICONS = {
+  battle_win:'⚔️', battle_loss:'💀', loot:'🎒', sell:'💰', drop:'🗑️',
+  equip:'🛡️', unequip:'📦', buy:'🛒', use:'🧪', mutate:'👹', drop_command:'⚙️'
+};
+
+const ZONES_DATA = {
+  1:{name:"Вайтран",icon:"🌾",tier:1,recLvl:1,minLvl:1,coord:"D5-F7",hp:"25–55",dmg:"3–7",exp:"10–22",gold:"4–18",loot:"30%",desc:"Центральные равнины. Идеально для начинающих путешественников.",monsters:["Волк","Разбойник","Скелет","Морозный Паук","Медведь","Злокрыс","Грязевой краб","Бандит"]},
+  2:{name:"Хьялмарк",icon:"☣️",tier:1,recLvl:2,minLvl:1,coord:"C4-E5",hp:"35–65",dmg:"4–9",exp:"14–30",gold:"6–22",loot:"35%",desc:"Заболоченная тундра. Туманы и трясины скрывают опасных тварей.",monsters:["Волк","Разбойник","Скелет","Болотный мертвец","Лось"]},
+  3:{name:"Хаафингар",icon:"🏰",tier:2,recLvl:3,minLvl:2,coord:"A2-D4",hp:"60–120",dmg:"7–16",exp:"28–60",gold:"18–50",loot:"45%",desc:"Горная столичная область. Стражники Солитьюда рядом, но за стенами — хаос.",monsters:["Драугр","Тролль","Саблезуб","Снежный тролль","Ворожея","Агент Талмора","Некромант"]},
+  4:{name:"Белый Берег",icon:"🏔️",tier:2,recLvl:3,minLvl:2,coord:"E3-H4",hp:"65–130",dmg:"8–17",exp:"30–65",gold:"20–52",loot:"45%",desc:"Суровая северная тундра. Ледяные твари и драугры бродят по курганам.",monsters:["Драугр","Снежный тролль","Ледяной Атронах","Морозный Паук","Пещерный медведь"]},
+  5:{name:"Предел",icon:"🏔️",tier:2,recLvl:4,minLvl:3,coord:"A5-C9",hp:"80–160",dmg:"10–22",exp:"40–90",gold:"25–65",loot:"50%",desc:"Дикие скалистые земли. Форсворны и звери охраняют каждый перевал.",monsters:["Драугр","Тролль","Форсворн","Гигант","Мамонт","Ледяной Атронах","Спригган"]},
+  6:{name:"Истмарк",icon:"🌋",tier:2,recLvl:4,minLvl:3,coord:"H5-J7",hp:"90–170",dmg:"11–23",exp:"45–95",gold:"28–70",loot:"50%",desc:"Зона гейзеров и горячих источников. Древние мертвецы бродят у кратеров.",monsters:["Драугр","Тролль","Ледяной Атронах","Ходячий Скелет-Маг","Гигант","Мамонт","Некромант"]},
+  7:{name:"Рифт",icon:"🍂",tier:2,recLvl:4,minLvl:3,coord:"H8-J10",hp:"85–165",dmg:"10–22",exp:"42–90",gold:"26–68",loot:"50%",desc:"Осенние леса и гнилые болота. Воры и твари делят эти земли.",monsters:["Драугр","Тролль","Пещерный медведь","Изгой","Спригган","Ворожея","Некромант"]},
+  8:{name:"Фолкрит",icon:"🌲",tier:2,recLvl:3,minLvl:2,coord:"D8-H10",hp:"70–140",dmg:"8–18",exp:"32–70",gold:"20–55",loot:"48%",desc:"Плотные леса на юге. Природа здесь опасна как никогда.",monsters:["Тролль","Саблезуб","Пещерный медведь","Спригган","Ворожея","Снежный тролль","Драугр","Некромант"]},
+  9:{name:"Винтерхолд",icon:"❄️",tier:3,recLvl:6,minLvl:5,coord:"G2-J5",hp:"150–280",dmg:"18–35",exp:"80–180",gold:"60–150",loot:"65%",desc:"Замёрзшие руины. Только опытные воины возвращаются живыми.",monsters:["Двемерский Центурион","Лич","Фалмер","Корус-жнец","Двемерская сфера","Драугр-военачальник","Ледяное привидение"]},
+  10:{name:"Глотка Мира",icon:"🐉",tier:3,recLvl:8,minLvl:7,coord:"G6-H8",hp:"220–400",dmg:"25–50",exp:"150–300",gold:"100–250",loot:"80%",desc:"Вершина мира. Драконы и жрецы охраняют древние секреты.",monsters:["Двемерский Центурион","Дремора","Лич","Древний Дракон","Владыка Вампиров","Корус-жнец","Драконий Жрец"]}
+};
+
+const ITEMS_DATA = {
+  weapons:["Меч","Топор","Булава","Кинжал","Двуручник","Копье","Секира","Боевой молот","Клеймор"],
+  armors:["Кираса","Броня","Кольчуга","Доспех","Нагрудник","Латы","Панцирь","Одеяние Мага"],
+  jewels:["Амулет","Кольцо","Ожерелье","Перстень","Медальон","Обруч"],
+  offhands:["Щит","Стилет","Фолиант","Гримуар","Оберег","Тарч","Резной щит"],
+  potions:{
+    "Экстракт Силы":{stat:"strength",value:15,duration:12},
+    "Настойка Ловкости":{stat:"dexterity",value:10,duration:12},
+    "Кровь Тролля":{stat:"constitution",value:20,duration:24},
+    "Отвар Стойкости":{stat:"physical_defense",value:15,duration:12},
+    "Зелье Удачи":{stat:"luck",value:15,duration:24},
+    "Зелье Точности":{stat:"accuracy",value:20,duration:12},
+    "Напиток Вампира":{stat:"vamp",value:10,duration:12},
+    "Зелье Берсерка":{stat:"crit",value:15,duration:12},
+    "Зелье Железной Кожи":{stat:"physical_defense",value:25,duration:18},
+    "Эликсир Отражения":{stat:"dodge",value:15,duration:12}
+  },
+  tiers:{1:["Железный","Кожаный","Медный","Ржавый","Деревянный","Меховой","Грубый"],2:["Стальной","Клёпаный","Хитиновый","Костяной","Бронзовый","Серебряный"],3:["Двемерский","Эльфийский","Ртутный","Орочий","Луннокаменный","Резной"],4:["Эбонитовый","Стеклянный","Сталгримовый","Нордский","Мифриловый"],5:["Даэдрический","Драконий","Костяной дракона","Адамантовый"]}
+};
+
+// ==================== AUTH ====================
+async function doLogin() {
+  const url = document.getElementById('login-url').value.trim().replace(/\/$/, '');
+  const token = document.getElementById('login-token').value.trim();
+  document.getElementById('login-error').style.display = 'none';
+
+  try {
+    const r = await fetch(`${url}/admin/stats`, { headers: { 'X-Admin-Token': token } });
+    if (!r.ok) throw new Error('Unauthorized');
+    API_BASE = url;
+    TOKEN = token;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    initApp();
+  } catch (e) {
+    document.getElementById('login-error').style.display = 'block';
+  }
+}
+
+function logout() {
+  API_BASE = ''; TOKEN = '';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+document.getElementById('login-token').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+
+// ==================== NAVIGATION ====================
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+
+  const loaders = { dashboard: loadDashboard, online: loadOnline, characters: loadCharacters, logs: loadLogs };
+  if (loaders[name]) loaders[name]();
+}
+
+// ==================== API ====================
+async function api(path, method = 'GET', body = null) {
+  const opts = { method, headers: { 'X-Admin-Token': TOKEN, 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API_BASE + path, opts);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// ==================== NOTIFY ====================
+function notify(msg, type = 'info') {
+  const n = document.createElement('div');
+  n.className = `notify-item ${type}`;
+  const icons = { success:'✅', error:'❌', info:'ℹ️' };
+  n.innerHTML = `<span>${icons[type]||'ℹ️'}</span> ${msg}`;
+  document.getElementById('notify').appendChild(n);
+  setTimeout(() => n.remove(), 4000);
+}
+
+// ==================== DASHBOARD ====================
+async function loadDashboard() {
+  try {
+    const [stats, online] = await Promise.all([api('/admin/stats'), api('/admin/online')]);
+    document.getElementById('s-online').textContent = stats.online;
+    document.getElementById('s-battles').textContent = stats.active_battles;
+    document.getElementById('s-chars').textContent = stats.total_characters;
+    document.getElementById('s-items').textContent = stats.total_items;
+    document.getElementById('s-logs').textContent = stats.total_logs;
+    document.getElementById('s-uptime').textContent = formatUptime(stats.uptime_seconds);
+    document.getElementById('s-mem').textContent = stats.memory_mb;
+    document.getElementById('online-badge').textContent = stats.online;
+
+    // Connection status
+    const dot = document.getElementById('status-dot');
+    const txt = document.getElementById('status-text');
+    dot.className = 'status-dot connected';
+    txt.textContent = `Подключён • ${new Date().toLocaleTimeString('ru')}`;
+
+    renderOnlineTable(online, 'dash-online-tbody', true);
+  } catch (e) {
+    const dot = document.getElementById('status-dot');
+    dot.className = 'status-dot';
+    document.getElementById('status-text').textContent = 'Ошибка подключения';
+    notify('Ошибка загрузки дашборда: ' + e.message, 'error');
+  }
+}
+
+function formatUptime(s) {
+  const h = Math.floor(s/3600);
+  const m = Math.floor((s%3600)/60);
+  const sec = s%60;
+  if (h > 0) return `${h}ч ${m}м`;
+  if (m > 0) return `${m}м ${sec}с`;
+  return `${sec}с`;
+}
+
+// ==================== ONLINE ====================
+async function loadOnline() {
+  try {
+    const online = await api('/admin/online');
+    document.getElementById('online-badge').textContent = online.length;
+    renderOnlineTable(online, 'online-tbody', false);
+  } catch (e) {
+    notify('Ошибка загрузки онлайна: ' + e.message, 'error');
+  }
+}
+
+function renderOnlineTable(online, tbodyId, mini) {
+  const tbody = document.getElementById(tbodyId);
+  if (!online.length) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">😴</div>Нет онлайн-игроков</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = online.map(p => `
+    <tr>
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <div class="avatar">${RACE_ICONS[p.race]||'🧍'}</div>
+        <div>
+          <div style="font-weight:600">${esc(p.username)}</div>
+          <span class="online-pill">online</span>
+        </div>
+      </div></td>
+      <td><span class="room-badge ${p.room}">${p.room||'—'}</span></td>
+      <td style="font-family:monospace;font-size:12px">${p.x|0}, ${p.y|0}</td>
+      <td>${BODY_ICONS[p.body_state]||'?'} ${p.body_state||'—'}</td>
+      <td><div class="actions-cell">
+        <button class="btn btn-danger btn-sm" onclick="kickById('${p.characterId}','${esc(p.username)}')">🦵 Кик</button>
+      </div></td>
+    </tr>
+  `).join('');
+}
+
+// ==================== CHARACTERS ====================
+async function loadCharacters() {
+  try {
+    allChars = await api('/admin/characters');
+    renderChars(allChars);
+  } catch (e) {
+    notify('Ошибка загрузки персонажей: ' + e.message, 'error');
+  }
+}
+
+function filterChars() {
+  const q = document.getElementById('char-search').value.toLowerCase();
+  const filtered = allChars.filter(c =>
+    c.username.toLowerCase().includes(q) ||
+    (c.race||'').toLowerCase().includes(q) ||
+    (c.body_state||'').toLowerCase().includes(q)
+  );
+  renderChars(filtered);
+}
+
+function renderChars(chars) {
+  const tbody = document.getElementById('chars-tbody');
+  if (!chars.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="icon">👤</div>Персонажи не найдены</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = chars.map(c => {
+    const hpPct = Math.min(100, Math.round((c.hp / (c.max_hp||100)) * 100));
+    const stPct = Math.min(100, Math.round((c.stamina / 100) * 100));
+    const expNext = c.level * 100;
+    const expPct = Math.min(100, Math.round(((c.exp||0) / expNext) * 100));
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <div class="avatar">${RACE_ICONS[c.race]||'👤'}</div>
+        <div>
+          <div style="font-weight:600">${esc(c.username)}</div>
+          <div style="font-size:11px;color:var(--text-dim)">${c.id.substring(0,12)}…</div>
+        </div>
+      </div></td>
+      <td><span class="race-badge">${c.race||'?'}</span></td>
+      <td><span class="level-badge">Lv.${c.level}</span></td>
+      <td><div class="bar-wrap">
+        <div class="bar"><div class="bar-fill hp" style="width:${hpPct}%"></div></div>
+        <span class="bar-val">${c.hp}/${c.max_hp}</span>
+      </div></td>
+      <td><div class="bar-wrap">
+        <div class="bar"><div class="bar-fill stamina" style="width:${stPct}%"></div></div>
+        <span class="bar-val">${c.stamina}</span>
+      </div></td>
+      <td><div class="bar-wrap">
+        <div class="bar"><div class="bar-fill exp" style="width:${expPct}%"></div></div>
+        <span class="bar-val">${c.exp||0}</span>
+      </div></td>
+      <td>💰 ${c.gold||0}</td>
+      <td>${BODY_ICONS[c.body_state]||'?'} ${c.body_state||'normal'}</td>
+      <td><div class="actions-cell">
+        <button class="btn btn-info btn-sm" onclick="openEdit('${c.id}')">✏️</button>
+        <button class="btn btn-success btn-sm" onclick="openInventory('${c.id}','${esc(c.username)}')">🎒</button>
+        <button class="btn btn-danger btn-sm" onclick="confirmDelete('${c.id}','${esc(c.username)}')">🗑️</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ==================== EDIT CHARACTER ====================
+async function openEdit(id) {
+  try {
+    const c = await api(`/admin/characters/${id}`);
+    document.getElementById('edit-id').value = c.id;
+    document.getElementById('edit-avatar').textContent = RACE_ICONS[c.race]||'👤';
+    document.getElementById('edit-username').textContent = c.username;
+    document.getElementById('edit-race-display').textContent = `${c.race||''} • Ур. ${c.level}`;
+    document.getElementById('edit-hp').value = c.hp;
+    document.getElementById('edit-maxhp').value = c.max_hp;
+    document.getElementById('edit-stamina').value = c.stamina;
+    document.getElementById('edit-gold').value = c.gold||0;
+    document.getElementById('edit-level').value = c.level;
+    document.getElementById('edit-exp').value = c.exp||0;
+    document.getElementById('edit-strength').value = c.strength||10;
+    document.getElementById('edit-dexterity').value = c.dexterity||10;
+    document.getElementById('edit-constitution').value = c.constitution||10;
+    document.getElementById('edit-luck').value = c.luck||10;
+    document.getElementById('edit-defense').value = c.physical_defense||5;
+    document.getElementById('edit-evasion').value = c.evasion||5;
+    document.getElementById('edit-block').value = c.block_chance||5;
+    document.getElementById('edit-accuracy').value = c.accuracy||10;
+    document.getElementById('edit-damage').value = c.base_damage||5;
+    document.getElementById('edit-bodystate').value = c.body_state||'human';
+    openModal('modal-edit');
+  } catch (e) {
+    notify('Ошибка загрузки данных: ' + e.message, 'error');
+  }
+}
+
+async function saveCharacter() {
+  const id = document.getElementById('edit-id').value;
+  const updates = {
+    hp: +document.getElementById('edit-hp').value,
+    max_hp: +document.getElementById('edit-maxhp').value,
+    stamina: +document.getElementById('edit-stamina').value,
+    gold: +document.getElementById('edit-gold').value,
+    level: +document.getElementById('edit-level').value,
+    exp: +document.getElementById('edit-exp').value,
+    strength: +document.getElementById('edit-strength').value,
+    dexterity: +document.getElementById('edit-dexterity').value,
+    constitution: +document.getElementById('edit-constitution').value,
+    luck: +document.getElementById('edit-luck').value,
+    physical_defense: +document.getElementById('edit-defense').value,
+    evasion: +document.getElementById('edit-evasion').value,
+    block_chance: +document.getElementById('edit-block').value,
+    accuracy: +document.getElementById('edit-accuracy').value,
+    base_damage: +document.getElementById('edit-damage').value,
+    body_state: document.getElementById('edit-bodystate').value
+  };
+  try {
+    await api(`/admin/characters/${id}`, 'PATCH', updates);
+    notify('Персонаж сохранён', 'success');
+    closeModal('modal-edit');
+    loadCharacters();
+  } catch (e) {
+    notify('Ошибка сохранения: ' + e.message, 'error');
+  }
+}
+
+// ==================== INVENTORY ====================
+async function openInventory(charId, username) {
+  document.getElementById('inv-username').textContent = username;
+  document.getElementById('inv-list').innerHTML = '<div style="color:var(--text-dim);padding:20px 0">Загрузка...</div>';
+  openModal('modal-inventory');
+  try {
+    const items = await api(`/admin/characters/${charId}/inventory`);
+    if (!items.length) {
+      document.getElementById('inv-list').innerHTML = '<div class="empty-state"><div class="icon">🎒</div>Инвентарь пуст</div>';
+      return;
+    }
+    const typeIcons = { weapon:'⚔️', armor:'🛡️', jewel:'💍', offhand:'🔰', potion:'🧪' };
+    document.getElementById('inv-list').innerHTML = `
+      <table style="width:100%">
+        <thead><tr><th>Предмет</th><th>Тип</th><th>Надет</th><th>Статы</th><th></th></tr></thead>
+        <tbody>${items.map(item => `
+          <tr>
+            <td>
+              <div style="font-weight:600">${typeIcons[item.item_data?.type]||'📦'} ${esc(item.item_data?.name||'?')}</div>
+              <div style="font-size:11px;color:var(--text-dim)">${item.id.substring(0,16)}…</div>
+            </td>
+            <td><span class="item-chip ${item.item_data?.type||''}">${item.item_data?.type||'?'}</span></td>
+            <td>${item.is_equipped ? '<span style="color:var(--green)">✅ Да</span>' : '<span style="color:var(--text-dim)">—</span>'}</td>
+            <td style="font-size:11px;color:var(--text-dim)">${formatStats(item.item_data?.stats)}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteItem('${item.id}','${charId}','${esc(username)}')">🗑️</button></td>
+          </tr>
+        `).join('')}</tbody>
+      </table>
+    `;
+  } catch (e) {
+    notify('Ошибка загрузки инвентаря: ' + e.message, 'error');
+  }
+}
+
+function formatStats(stats) {
+  if (!stats) return '—';
+  return Object.entries(stats).map(([k,v]) => `${k}:${v}`).join(', ');
+}
+
+async function deleteItem(itemId, charId, username) {
+  if (!confirm(`Удалить предмет из инвентаря?`)) return;
+  try {
+    await api(`/admin/inventory/${itemId}`, 'DELETE');
+    notify('Предмет удалён', 'success');
+    openInventory(charId, username);
+  } catch (e) {
+    notify('Ошибка: ' + e.message, 'error');
+  }
+}
+
+// ==================== DELETE CHAR ====================
+function confirmDelete(id, username) {
+  document.getElementById('confirm-text').innerHTML =
+    `Вы уверены, что хотите <strong style="color:var(--red)">удалить персонажа «${esc(username)}»</strong>?<br><br>Это действие <strong>необратимо</strong>. Инвентарь также будет удалён.`;
+  const btn = document.getElementById('confirm-ok-btn');
+  btn.onclick = async () => {
+    try {
+      await api(`/admin/characters/${id}`, 'DELETE');
+      notify(`Персонаж ${username} удалён`, 'success');
+      closeModal('modal-confirm');
+      loadCharacters();
+    } catch (e) {
+      notify('Ошибка удаления: ' + e.message, 'error');
+    }
+  };
+  openModal('modal-confirm');
+}
+
+// ==================== LOGS ====================
+async function loadLogs() {
+  const limit = document.getElementById('log-limit')?.value || 50;
+  try {
+    const logs = await api(`/admin/logs?limit=${limit}`);
+    const list = document.getElementById('logs-list');
+    if (!logs.length) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">📋</div>Логи отсутствуют</div>';
+      return;
+    }
+    list.innerHTML = logs.map(log => {
+      const icon = LOG_ICONS[log.event_type] || '📌';
+      const username = log.characters?.username || log.character_id?.substring(0,12)+'…';
+      const time = new Date(log.created_at).toLocaleString('ru');
+      const details = log.details ? JSON.stringify(log.details, null, 2) : null;
+      return `<div class="log-item">
+        <div class="log-icon">${icon}</div>
+        <div class="log-content">
+          <div class="log-title"><strong>${esc(username)}</strong> — ${esc(log.event_type)}</div>
+          <div class="log-meta">${time}</div>
+          ${details ? `<div class="log-details">${esc(details)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    notify('Ошибка загрузки логов: ' + e.message, 'error');
+  }
+}
+
+// ==================== ZONES ====================
+function renderZones() {
+  const grid = document.getElementById('zones-grid');
+  grid.innerHTML = Object.values(ZONES_DATA).map(z => {
+    const tierLabel = z.tier === 1 ? 't1' : z.tier === 2 ? 't2' : 't3';
+    const tierText = z.tier === 1 ? 'Tier 1 — Новичок' : z.tier === 2 ? 'Tier 2 — Средний' : 'Tier 3 — Эксперт';
+    return `<div class="zone-card">
+      <div class="zone-card-header">
+        <div class="zone-icon">${z.icon}</div>
+        <div>
+          <div class="zone-name">${z.name}</div>
+          <div class="zone-coord">📍 ${z.coord}</div>
+        </div>
+      </div>
+      <span class="zone-tier ${tierLabel}">${tierText}</span>
+      <div class="zone-stats">
+        <div class="zone-stat"><span>Мин. уровень</span><span>${z.minLvl}+</span></div>
+        <div class="zone-stat"><span>Рек. уровень</span><span>${z.recLvl}+</span></div>
+        <div class="zone-stat"><span>HP монстров</span><span>${z.hp}</span></div>
+        <div class="zone-stat"><span>Урон</span><span>${z.dmg}</span></div>
+        <div class="zone-stat"><span>EXP</span><span>${z.exp}</span></div>
+        <div class="zone-stat"><span>Золото</span><span>${z.gold}</span></div>
+        <div class="zone-stat"><span>Шанс лута</span><span>${z.loot}</span></div>
+      </div>
+      <div class="zone-monsters"><strong>Монстры:</strong> ${z.monsters.slice(0,5).join(', ')}${z.monsters.length>5?'…':''}</div>
+      <div class="zone-desc">${z.desc}</div>
+    </div>`;
+  }).join('');
+}
+
+// ==================== ITEMS ====================
+function renderItems() {
+  const d = ITEMS_DATA;
+  const tierColors = ['','#888','#4CAF6E','#8ab4f8','#c8a84b','#e05c5c'];
+  document.getElementById('items-content').innerHTML = `
+    <div class="items-section">
+      <h3>⚔️ Оружие (${d.weapons.length} типов)</h3>
+      <div class="items-flex">${d.weapons.map(w=>`<span class="item-chip weapon">⚔️ ${w}</span>`).join('')}</div>
+    </div>
+    <div class="items-section">
+      <h3>🛡️ Броня (${d.armors.length} типов)</h3>
+      <div class="items-flex">${d.armors.map(w=>`<span class="item-chip armor">🛡️ ${w}</span>`).join('')}</div>
+    </div>
+    <div class="items-section">
+      <h3>💍 Украшения (${d.jewels.length} типов)</h3>
+      <div class="items-flex">${d.jewels.map(w=>`<span class="item-chip jewel">💍 ${w}</span>`).join('')}</div>
+    </div>
+    <div class="items-section">
+      <h3>🔰 Левая рука (${d.offhands.length} типов)</h3>
+      <div class="items-flex">${d.offhands.map(w=>`<span class="item-chip offhand">🔰 ${w}</span>`).join('')}</div>
+    </div>
+    <div class="items-section">
+      <h3>🧪 Зелья и эффекты</h3>
+      <div class="potion-grid">${Object.entries(d.potions).map(([name,p])=>`
+        <div class="potion-card">
+          <div class="potion-name">🧪 ${name}</div>
+          <div class="potion-stat">Стат: <span>${p.stat}</span></div>
+          <div class="potion-stat">Бонус: <span>+${p.value}</span></div>
+          <div class="potion-stat">Длительность: <span>${p.duration} ходов</span></div>
+        </div>
+      `).join('')}</div>
+    </div>
+    <div class="items-section">
+      <h3>🏷️ Тиры материалов</h3>
+      ${Object.entries(d.tiers).map(([tier,mats])=>`
+        <div style="margin-bottom:10px">
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">Тир ${tier} (множитель ×${[1,1,2,3,5,8][tier]})</div>
+          <div class="items-flex">${mats.map(m=>`<span class="item-chip" style="border-color:${tierColors[tier]}40;color:${tierColors[tier]}">${m}</span>`).join('')}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ==================== BROADCAST ====================
+async function quickBroadcast() {
+  const text = document.getElementById('quick-msg').value.trim();
+  const room = document.getElementById('quick-room').value;
+  if (!text) return;
+  try {
+    await api('/admin/broadcast', 'POST', { text, room: room||undefined });
+    notify('Сообщение отправлено', 'success');
+    document.getElementById('quick-msg').value = '';
+  } catch (e) {
+    notify('Ошибка: ' + e.message, 'error');
+  }
+}
+
+async function sendBroadcast() {
+  const text = document.getElementById('bc-text').value.trim();
+  const room = document.getElementById('bc-room').value;
+  if (!text) return;
+  try {
+    await api('/admin/broadcast', 'POST', { text, room: room||undefined });
+    notify('Сообщение отправлено', 'success');
+    document.getElementById('bc-text').value = '';
+  } catch (e) {
+    notify('Ошибка: ' + e.message, 'error');
+  }
+}
+
+// ==================== KICK ====================
+async function kickById(id, username) {
+  if (!confirm(`Кикнуть ${username}?`)) return;
+  try {
+    const r = await api(`/admin/kick/${id}`, 'POST');
+    notify(r.message, r.success ? 'success' : 'info');
+  } catch (e) {
+    notify('Ошибка: ' + e.message, 'error');
+  }
+}
+
+async function kickPlayer() {
+  const id = document.getElementById('kick-id').value.trim();
+  if (!id) return notify('Введите Character ID', 'error');
+  try {
+    const r = await api(`/admin/kick/${id}`, 'POST');
+    notify(r.message, r.success ? 'success' : 'info');
+    document.getElementById('kick-id').value = '';
+  } catch (e) {
+    notify('Ошибка: ' + e.message, 'error');
+  }
+}
+
+// ==================== MODAL ====================
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ==================== REFRESH ALL ====================
+function refreshAll() {
+  const active = document.querySelector('.nav-item.active');
+  if (active) active.click();
+}
+
+// ==================== INIT ====================
+function initApp() {
+  renderZones();
+  renderItems();
+  loadDashboard();
+  // Авто-обновление каждые 30 секунд
+  setInterval(() => {
+    const activePage = document.querySelector('.page.active');
+    if (activePage?.id === 'page-dashboard') loadDashboard();
+    if (activePage?.id === 'page-online') loadOnline();
+  }, 30000);
+}
+
+// ==================== UTILS ====================
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
