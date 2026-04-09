@@ -289,7 +289,7 @@
     <p>Введите данные для доступа к панели управления</p>
     <div class="field">
       <label>Адрес сервера</label>
-      <input type="text" id="login-url" value="http://localhost:3000" placeholder="http://localhost:3000">
+      <input type="text" id="login-url" placeholder="https://skyrim-rpg.onrender.com">
     </div>
     <div class="field">
       <label>Токен доступа</label>
@@ -701,6 +701,14 @@
 let API_BASE = '';
 let TOKEN = '';
 let allChars = [];
+
+// Автоподстановка URL — если открыто с сервера, берём текущий origin
+(function() {
+    const urlInput = document.getElementById('login-url');
+    if (urlInput) {
+        urlInput.value = window.location.origin !== 'null' ? window.location.origin : 'https://skyrim-rpg.onrender.com';
+    }
+})();
 
 const RACE_ICONS = {
   'Норд':'🧊','Nord':'🧊','Орсимер':'🐗','Каджит':'🐱','Аргонианин':'🦎',
